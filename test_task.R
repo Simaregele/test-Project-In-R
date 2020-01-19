@@ -2,10 +2,43 @@
 setwd("C:/Users/mrsim/Google Диск/R statistic/test_task")
 library(ggplot2)
 library(psych)
-library(caTools)
+
+
 
 train_data  = read.csv("train_data_200k.csv")
 test_data = read.csv("test_data_100k.csv")
+
+
+
+# separate to train and test
+set.seed(145)
+sample = sample.split(train_data,SplitRatio = 0.75)
+train_data_train =subset(train_data,sample ==TRUE)
+train_data_test =subset(train_data,sample ==FALSE)
+
+# linear model lets go
+# del date 
+train_data_train <- subset(train_data_train, select = -c(target2, target3, target4))
+train_data_test <- subset(train_data_test, select = -c(target2, target3, target4))
+
+
+fit_tg1 <- lm(target1 ~ ., train_data_train, na.action=na.omit)
+summary(fit_tg1)
+# didnt work lets del col with less then 50% of values
+
+cor_data <- cor(train_data_train, use = "pairwise.complete.obs")
+
+
+#lets find and delete cor variables
+length(which(cor_data>0.9&cor_data!=1, arr.ind = TRUE))
+
+
+
+
+
+
+
+
 
 
 #return quanity of na values in train_data
@@ -37,22 +70,20 @@ describe(train_data$tag1)
 
 is.na()
 describe(exp(train_data$tag1))
-qqplot(train_data$tag1, train_data$target2)
+qqplot(train_data$tag1, train_data$target3)
+# linear regression not very usefool i think looks like sigmoid fuction better fit
 
-# separate to train and test
-set.seed(145)
-sample = sample.split(train_data,SplitRatio = 0.75)
-train_data_train =subset(train_data,sample ==TRUE)
-train_data_test =subset(train_data,sample ==FALSE)
 
 
 # fill NA by mean
-train_data_train[is.na(train_data_train)] <- mean()
+train_data_train[is.na(train_data_train)] <- mean(train_data_train)
 
 
 
 
 #replace outliers with 3 sigma values
+
+
 
 
 
