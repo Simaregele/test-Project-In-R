@@ -8,9 +8,9 @@ library(ggpubr) # for multiplying plots dont work with qqplot
 library(rapport)
 
 
-
 train_data  = read.csv("train_data_200k.csv")
 test_data = read.csv("test_data_100k.csv")
+
 
 ##### 1 model, del date, del cor, del feature with less 70% data
 
@@ -24,27 +24,85 @@ cor_data <- function(dataset){
   cor_data
 }
 
-# delete coll that have less 75% of values
+# delete coll that have less 70% of values
 train_data <- train_data[,sapply(train_data, function(x) (sum(is.na(x))/2000))<0.70]
+
+
+## prepare for norm
+temp_targets <- subset(train_data, select = c(target1, target2, target3, target4))
+temp_data <- subset(train_data, select = -c(target1, target2, target3, target4))
+temp_data <- sapply(temp_data, scale)
+temp_data <- as.data.frame(temp_data)
+train_data <- subset(temp_data)
+
+# correlation matrix
+correlation_data <- cor_data(train_data)
+### fin correlation
+corr_indexes <- findCorrelation(correlation_data, cutoff = 0.7)
+
+data_with_corr <- subset(train_data, select = c(corr_indexes))
+train_data <- subset(train_data, select = c(corr_indexes))
+train_data <- subset(train_data, select=-c(target1))
+
+
+train_data$target1 <- temp_targets$target1
+train_data$target2 <- temp_targets$target2
+train_data$target3 <- temp_targets$target3
+train_data$target4 <- temp_targets$target4
+
+
+## split the data
+### Train, validate, test
+set.seed(145)
+sample = sample.split(train_data, SplitRatio = 0.60)
+target1_train =subset(train_data,sample ==TRUE)
+target1_val =subset(train_data,sample ==FALSE)
+sample2 = sample.split(target1_val, SplitRatio = 0.50)
+target1_test =subset(target1_val,sample ==FALSE)
+target1_val =subset(target1_val,sample ==TRUE)
+
+
+# own lossfunctions
+mse <- function(true, pred){
+  val_one <- (true - pred)**2
+  sum_of_val <- sum(val_one, na.rm = T)
+  return(sum_of_val)}
+
+mae <- function(true, pred){
+  val_one <- abs(true - pred)
+  sum_of_val <- sum(val_one, na.rm = T)
+  return(sum_of_val)}
+
+
+# set.seed(145)
+# sample = sample.split(train_data, SplitRatio = 0.70)
+# target1_train =subset(train_data_r,sample ==TRUE)
+# target1_test =subset(train_data_r,sample ==FALSE)
+# # random forest, lets try
+# train_data.rf <- randomForest(target1~., train_data, na.rm=T)
 
 
 #lm on all features dont drop corr values
 # for target 1
-train_data_r <- subset(train_data, select = -c(target2, target3, target4))
+# train_data_r <- subset(train_data, select = -c(target2, target3, target4))
+# 
+# set.seed(145)
+# sample = sample.split(train_data_r, SplitRatio = 0.70)
+# target1_train =subset(train_data_r,sample ==TRUE)
+# target1_test =subset(train_data_r,sample ==FALSE)
 
-set.seed(145)
-sample = sample.split(train_data_r, SplitRatio = 0.70)
-target1_train =subset(train_data_r,sample ==TRUE)
-target1_test =subset(train_data_r,sample ==FALSE)
+### fin correlation
+corr_indexes <- findCorrelation(correlation_data, cutoff = 0.7)
 
 
 fullmodel <- lm(target1 ~ ., data = na.omit(target1_train))
 one_tag_nodel <- lm(target1 ~ tag1, data = na.omit(target1_train))
 summary(one_tag_nodel)
 step_model <- step(fullmodel, direction = "backward")
+hist(train_data$target4)
+shapiro.test(train_data$target1)
 
-
-
+## dont work wirh normalized
 step_fited_model <- lm(formula = target1 ~ (log(tag10) + tag11 + tag12 + 
                                           tag13 + tag21 + 
                                           tag23 + tag24 + tag27 + tag28 + tag30 + 
@@ -68,27 +126,54 @@ step_fited_model <- lm(formula = target1 ~ (tag10 + tag11 + tag12 +
                                               tag76)**2
                        , data = na.omit(target1_train))
 summary(step_fited_model)
-# Residual standard error: 1.825e-05 on 137647 degrees of freedom
-# Multiple R-squared:  0.9546,	Adjusted R-squared:  0.9545 
-# F-statistic:  6655 on 435 and 137647 DF,  p-value: < 2.2e-16
-# > target1_test$predict <- predict(step_fited_model, target1_test)
-# > mse(target1_test$target1, target1_test$predict)
-# [1] 2.95757e-05
-# > mae(target1_test$target1, target1_test$predict)
-# [1] 0.8231694
-
-
+# Residual standard error: 1.829e-05 on 117348 degrees of freedom
+# Multiple R-squared:  0.9544,	Adjusted R-squared:  0.9543 
+# F-statistic:  5652 on 435 and 117348 DF,  p-value: < 2.2e-16
 
 #lets predict
 target1_test$predict <- predict(step_fited_model, target1_test)
+target1_val$predict <- predict(step_fited_model, target1_val)
+# test
 mse(target1_test$target1, target1_test$predict)
 mae(target1_test$target1, target1_test$predict)
 # > mse(target1_test$target1, target1_test$predict)
-# [1] 2.050148e-05
-# > mse(target1_test$target1, target1_test$predict)
-# [1] 3.028517e-05
+# [1] 1.182325e-05
+# > mae(target1_test$target1, target1_test$predict)
+# [1] 0.4433596
+# val
+mse(target1_val$target1, target1_val$predict)
+mae(target1_val$target1, target1_val$predict)
+# [1] 3.244601e-05
+# > mae(target1_val$target1, target1_val$predict)
+# [1] 0.6599488
 
-## neural yeah!
+train_data <- subset(train_data, select = -c(target1))
+train_data$target2 <- temp_targets$target2
+
+# predict test_data
+test_data$target1 <- predict(step_fited_model, test_data)
+
+
+
+write.csv(test_data,'test_data_my_pred.csv')
+
+
+# rf
+train_data.rf <- randomForest(target1 ~ (tag10 + tag11 + tag12 + 
+                                           tag13 + tag21 + 
+                                           tag23 + tag24 + tag27 + tag28 + tag30 + 
+                                           tag31 + tag32 + tag35 + tag42 + tag43 + tag47 + 
+                                           tag49 + tag55 + tag58  + tag63 + tag64 + tag65 + 
+                                           tag66 + tag67 + tag70 + tag71 + tag74 + tag75 + 
+                                           tag76),data = na.omit(target1_train))
+summary(train_data.rf)
+
+
+
+
+
+
+## neural yeah! 2 layers
 library(neuralnet)
 neural <- neuralnet(target1 ~ ., hidden=2, data = na.omit(target1_train))
 plot(neural)
@@ -100,6 +185,32 @@ mae(target1_test$target1, target1_test$predict)
 # > mae(target1_test$target1, target1_test$predict)
 # [1] 3.965331
 # bad result
+
+# 3 layers
+neural <- neuralnet(target1 ~ ., hidden=3, data = na.omit(target1_train))
+target1_test$predict <- predict(neural, target1_test)
+mse(target1_test$target1, target1_test$predict)
+mae(target1_test$target1, target1_test$predict)
+# > mse(target1_test$target1, target1_test$predict)
+# [1] 0.0004451121
+# > mae(target1_test$target1, target1_test$predict)
+# [1] 3.966327
+
+# good values?
+neural <- neuralnet(target1 ~ (tag10 + tag11 + tag12 + 
+                                 tag13 + tag21 + 
+                                 tag23 + tag24 + tag27 + tag28 + tag30 + 
+                                 tag31 + tag32 + tag35 + tag42 + tag43 + tag47 + 
+                                 tag49 + tag55 + tag58  + tag63 + tag64 + tag65 + 
+                                 tag66 + tag67 + tag70 + tag71 + tag74 + tag75 + 
+                                 tag76), hidden=3, data = na.omit(target1_train))
+target1_test$predict <- predict(neural, target1_test)
+mse(target1_test$target1, target1_test$predict)
+mae(target1_test$target1, target1_test$predict)
+# [1] 0.0004468171
+# > mae(target1_test$target1, target1_test$predict)
+# [1] 3.98364
+
 
 
 # cor values
@@ -163,16 +274,6 @@ mae(target1_test$target1, target1_test$predict)
 cor_data(target1_train)
 target1_test$predict <- predict(fit_tg1, target1_test)
 
-# own lossfunctions
-mse <- function(true, pred){
-  val_one <- (true - pred)**2
-  sum_of_val <- sum(val_one, na.rm = T)
-  return(sum_of_val)}
-
-mae <- function(true, pred){
-  val_one <- abs(true - pred)
-  sum_of_val <- sum(val_one, na.rm = T)
-  return(sum_of_val)}
 
 
 
@@ -211,7 +312,12 @@ anova(fit_tg1, fit2_tg1)
 
 ####target 3
 
+
+
 # split data, regression -> mse
+
+
+train_data_r <- subset(train_data, select = -c(target2, target1, target4))
 set.seed(145)
 sample = sample.split(train_data_r, SplitRatio = 0.70)
 target3_train =subset(train_data_r,sample ==TRUE)
@@ -221,6 +327,9 @@ target3_test <- subset(target3_test, select = -c(target2, target1, target4))
 str(target3_train)
 str(target3_test)
 
+full_tg3 <- lm(target3 ~ ., data = na.omit(target3_train))
+summary(full_tg3)
+step_big
 fit_tg3 <- lm(target3 ~ tag1+tag12+tag20+tag22+tag23+tag24+tag43
               +tag55+tag56+tag58+tag60+tag63+tag75, target3_train, na.action = na.omit)
 summary(fit_tg3)
